@@ -1,6 +1,7 @@
 # UniXNU-diting
 本仓库为 wang2857 的 fork；上游为 nagatoquin33/UniXNU-diting。
 当前基线为 iPadOS 18.7.10（22H374）；后续为ios18基准。
+本 fork 的 README 修改由 AI 辅助完成
 
 Redmi K50 至尊版（`diting` / Qualcomm SM8475）的 UniXNU 格式 2 设备仓库。目标系统为
 **iPadOS 18.7.10（22H374）/ Darwin 24.6.0**，系统输入为 iPad7,11 / J171AP。

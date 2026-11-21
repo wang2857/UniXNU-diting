@@ -316,6 +316,8 @@ lba_bytes = 4096
 [package]
 # The UniXNU checkout, relative to this repository: scripts/package.sh reads it.
 unixnu = "../UniXNU"
+# The Diting boot partition is 0xC000000 bytes; official release verify must reject a larger boot.img.
+boot_partition_bytes = 0xC000000
 
 [package.defconfig]
 "ipados-18.7.10-22H374" = "diting_ipados18_defconfig"
@@ -326,11 +328,10 @@ unixnu = "../UniXNU"
 dtb = "build/diting/diting.dtb"
 
 [bootimg.image]
-# Resources/Configs/diting.toml in the firmware records the Android build system's v4, but unixnu
-# packs and verifies v0-v2 headers only: verify() reads header_version and pagesize at the v0/v1/v2
-# offsets and a v4 header carries them elsewhere. This header therefore describes boot/boot.img,
-# the spec product whose ramdisk is the bare payload.img. The flashable v4 image the firmware
-# accepts is boot/diting-xnu-initial.img, written by scripts/finalize-diting-adt.py with the same
-# container the local flow produces; see the payload section above.
-header_version = 0
+# Diting's stock bootloader requires Android boot image v4. The UniXNU core bootimg step now packs
+# and verifies v3/v4 headers directly, so boot/boot.img is the flashable product rather than a v0
+# side artifact. The payload remains a FAT volume; the boot image's ramdisk is wrapped in the
+# PONGFAT1 envelope DitingBootMemoryDxe validates without changing payload/payload.img.
+header_version = 4
 pagesize = 4096
+ramdisk_envelope = "PONGFAT1"

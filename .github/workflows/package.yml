@@ -92,13 +92,11 @@ jobs:
           submodules: recursive
       - uses: actions/checkout@v4
         with:
-          # Fork of UniXNU at c96b299 with one added commit: the shared kernel step takes
-          # MACHINE_CONFIGS from board.toml [kernel] machine_config instead of hardcoding
-          # BCM2837, which this board cannot build (its patches add MASTER.arm64.diting).
-          # c96b299 is used rather than main because main HEAD points drivers/ArmCpu at
-          # 2e11cda, which the submodule remote does not serve.
-          repository: nagatoquin33/UniXNU
-          ref: 0ce9779c2aa7c4f85fdc7f7610bcd0cfc2fde8e2
+          # Diting core fork pinned at 0ce9779 plus the v4/PONGFAT1 bootimg change:
+          # 3f5c1ee is on this fork's diting-pin-0ce9779 branch and keeps the Diting
+          # machine_config and MACHINE_CONFIGS work from 0ce9779.
+          repository: wang2857/UniXNU
+          ref: 3f5c1eed5a7bc60bbf96f30d96a25f49217dfda1
           path: UniXNU
           submodules: recursive
       - uses: actions/checkout@v4

@@ -391,33 +391,33 @@ jobs:
             --cpus 8 \
             --ufs-probe
           ls -l "$WORK/boot"
-      - name: self-contained v4 (shim + firmware)
-        # finalize-diting-adt.py leaves the kernel slot empty because a Diting device boots the
-        # firmware from its own partition. A fastboot-boot candidate needs the shim and the
-        # volume in that slot. The ramdisk is the raw FAT payload; the official firmware scans
-        # its boot sector.
+      - name: repack final payload
+        # The device ADT/DarwinBoot pass changes payload.img and creates the
+        # empty-kernel diting-xnu-initial.img. Repack boot.img with the same
+        # official bootimg step from the final payload, then keep the historical
+        # download name as a byte-identical copy and refresh the manifest.
         working-directory: device
         env:
           DEFCONFIG: ${{ inputs.defconfig }}
         run: |
           set -euo pipefail
-          # llvm is keg-only in Homebrew; llvm-objcopy was not on PATH.
-          export PATH="/usr/local/opt/llvm/bin:/usr/local/opt/lld/bin:$PATH"
           CONFIG="${DEFCONFIG%_defconfig}"
           WORK="$GITHUB_WORKSPACE/UniXNU/out/diting/${{ inputs.os }}/$CONFIG"
-          # The firmware built two steps above, not the Diting baseline.
           FD="$GITHUB_WORKSPACE/firmware-fd/SILICIUM_UEFI.fd"
           DTB="$WORK/device-tree/build/diting/hardware.dtb"
           [ -f "$FD" ] || { echo "missing firmware volume: $FD" >&2; exit 1; }
           [ -f "$DTB" ] || { echo "missing hardware DTB: $DTB" >&2; exit 1; }
-          python3 scripts/build-bootimg.py \
-            --shim "$GITHUB_WORKSPACE/firmware-fd/BootShim.bin" \
-            --mkbootimg "$GITHUB_WORKSPACE/firmware-fd/mkbootimg.py" \
-            --config "$GITHUB_WORKSPACE/firmware-fd/diting.toml" \
+          cd "$GITHUB_WORKSPACE/UniXNU"
+          python3 unixnu bootimg \
+            -D "$GITHUB_WORKSPACE/device" \
+            --uefi "$GITHUB_WORKSPACE/uefi-diting" \
             --fd "$FD" \
             --dtb "$DTB" \
-            --ramdisk "$WORK/payload/payload.img" \
-            --output-dir "$WORK/boot"
+            --ramdisk "$WORK/payload/payload.img"
+          cp -f "$WORK/boot/boot.img" "$WORK/boot/diting-unixnu-uefi.img"
+          cd "$GITHUB_WORKSPACE/device"
+          python3 scripts/check-loader-adt-contract.py "$WORK/boot/boot.img"
+          python3 scripts/refresh-package-manifest.py "$WORK"
           ls -l "$WORK/boot"
       - name: keep the logs
         if: always()

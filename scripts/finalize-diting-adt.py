@@ -34,7 +34,7 @@ import tomllib
 import zlib
 from pathlib import Path
 
-HEADER_BYTES = 4096          # PONGFAT1 header, and the boot image's first page
+HEADER_BYTES = 4096          # Android boot v4 header page
 SIGNATURE_BYTES = 4096       # boot v4 signature area, left empty
 BOOT_HEADER_V4_SIZE = 1584   # boot image header v4, as mkbootimg writes it
 BOOT_ARGS_BYTES = 1536       # BOOT_ARGS_SIZE 512 + BOOT_EXTRA_ARGS_SIZE 1024

@@ -92,7 +92,7 @@ jobs:
           submodules: recursive
       - uses: actions/checkout@v4
         with:
-          # Diting core fork pinned at 0ce9779 plus the v4/PONGFAT1 bootimg change:
+          # Diting core fork pinned at 0ce9779 plus the v4 bootimg change:
           # 3f5c1ee is on this fork's diting-pin-0ce9779 branch and keeps the Diting
           # machine_config and MACHINE_CONFIGS work from 0ce9779.
           repository: wang2857/UniXNU

@@ -35,7 +35,7 @@
 启动镜像为 Android v4 boot 容器：
 
 - kernel 槽：`gzip(BootShim + UEFI FD) + DTB`；
-- ramdisk：PONGFAT1 负载，内含 ADT（`/chosen` 的 manifest 哈希、内存区间、diting token）、manifest、内核与用户态输入；
+- ramdisk：裸 FAT payload，内含 ADT（`/chosen` 的 manifest 哈希、内存区间、diting token）、manifest、内核与用户态输入；
 - 参数：`[payload].kernel_args`（≤1000 B 由 core 检查，含 NUL ≤1023 B），`diting_*` 前缀为本设备开关。
 
 运行镜像分三类：

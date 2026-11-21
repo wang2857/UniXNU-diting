@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Pack Diting's v4 boot image and verify its contents without touching a device.
 
-UniXNU's current bootimg.verify assumes the legacy header layout. Use the same
-verified shim compiler and Mu-Silicium mkbootimg with a Diting-specific v4 reader.
+The UniXNU core at the current Diting pin packs and verifies v3/v4 headers and
+accepts the raw FAT payload. This helper remains for local/side image builds and
+regression checks; it uses the same shim compiler and Mu-Silicium mkbootimg.
 """
 import argparse
 import gzip

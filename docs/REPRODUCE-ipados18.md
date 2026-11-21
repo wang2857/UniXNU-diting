@@ -18,7 +18,7 @@
 ./unixnu build kernel -D "$device_repo" --out "$out"
 ~~~
 
-用 `scripts/build-release-image-linux.py` 中的 `prelink_release_kernel(..., iogpu=True)` 处理 `device-tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_DITING/mach.development.diting`。根列表和 slide 从 `board.toml` 读取。正式显示镜像沿用已上机 v3 的 Android v4 头、固件槽和 PONGFAT1 尺寸。用 `mcopy -o` 只替换 FAT 内的 `/EFI/UniXNU/Payloads/kernel.macho`，更新 PONGFAT1 头偏移 24 的 32 位小端 CRC32（对 FAT 内容计算）。复核 FAT 成员集合及其余成员哈希一致。缺少参考封装时可用完整打包流程重建。
+用 `scripts/build-release-image-linux.py` 中的 `prelink_release_kernel(..., iogpu=True)` 处理 `device-tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_DITING/mach.development.diting`。根列表和 slide 从 `board.toml` 读取。正式显示镜像沿用已上机 v3 的 Android v4 头、固件槽；ramdisk 是裸 FAT payload。用 `mcopy -o` 只替换 FAT 内的 `/EFI/UniXNU/Payloads/kernel.macho`；不再有 PONGFAT1 头或 CRC 更新。复核 FAT 成员集合及其余成员哈希一致。缺少参考封装时可用完整打包流程重建。
 
 ~~~sh
 python3 scripts/precheck-workflow.py

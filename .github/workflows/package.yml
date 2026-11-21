@@ -226,6 +226,7 @@ jobs:
         # checkout, so install them before release resolves board.os_profile.
         run: python3 device/scripts/install-unixnu-inputs.py --unixnu UniXNU
       - name: gpu firmware
+        if: inputs.defconfig != 'diting_ipados18_ci_defconfig'
         env:
           A1: ${{ secrets.ADRENO_FW_1 }}
           A2: ${{ secrets.ADRENO_FW_2 }}
@@ -250,12 +251,14 @@ jobs:
           PY
           ls -l "$out"
       - name: wifi sources
+        if: inputs.defconfig != 'diting_ipados18_ci_defconfig'
         # 按设备仓库清单固定三份源码，并一次检查 ath11k、MHI、QMI 依赖。
         run: >-
           python3 device/scripts/prepare-ci-wifi.py
           --workspace "$GITHUB_WORKSPACE"
           --manifest device/configs/diting-native-sources.toml
       - name: preflight Wi-Fi compile
+        if: inputs.defconfig != 'diting_ipados18_ci_defconfig'
         env:
           UNIXNU_DEVICE: ${{ github.workspace }}/device
           DITING_WIFI_SOURCE: ${{ github.workspace }}/linux

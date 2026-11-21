@@ -337,8 +337,8 @@ def main():
     target.write_bytes(image)
     if image[:8] != b'ANDROID!' or struct.unpack_from('<I', image, 40)[0] != 4:
         raise SystemExit('the boot image is not an Android v4 container')
-    if image[HEADER_BYTES:HEADER_BYTES + 8] != MAGIC:
-        raise SystemExit('the ramdisk does not begin with the FAT boot sector')
+    if image[HEADER_BYTES + 510:HEADER_BYTES + 512] != b'\x55\xaa':
+        raise SystemExit('the ramdisk does not begin with a FAT boot sector')
 
     record = {'generator': 'scripts/make-diting-adt-ipados18.py',
               'container': {'format': 'android-boot-v4', 'header_bytes': BOOT_HEADER_V4_SIZE,

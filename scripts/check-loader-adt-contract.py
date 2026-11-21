@@ -468,14 +468,14 @@ def check_image(path):
         for token in OLD:
             if token in loader:
                 failures.append(f"loader still carries {token.decode()}")
-    # Payload envelope + ADT contract.
-    if ramdisk[:8] != b"PONGFAT1":
-        failures.append("payload is not a PONGFAT1 envelope")
-        return failures, notes
-    tag, version, head_len, fat_len, crc, flags = struct.unpack_from("<8sIIQII", ramdisk, 0)
-    fat = ramdisk[head_len:head_len + fat_len]
-    if zlib.crc32(fat) != crc:
-        failures.append("PONGFAT1 CRC does not match the FAT")
+    # Payload + ADT contract. New images carry raw FAT; accept the legacy PONGFAT1
+    # wrapper only for old evidence images.
+    fat = ramdisk
+    if ramdisk[:8] == b"PONGFAT1":
+        tag, version, head_len, fat_len, crc, flags = struct.unpack_from("<8sIIQII", ramdisk, 0)
+        fat = ramdisk[head_len:head_len + fat_len]
+        if zlib.crc32(fat) != crc:
+            failures.append("legacy PONGFAT1 CRC does not match the FAT")
     for token in (b"darwinboot-memory-ranges", b"diting-allocatable-ram"):
         if token not in fat:
             failures.append(f"payload ADT lacks {token.decode()}")

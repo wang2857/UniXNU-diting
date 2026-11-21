@@ -211,10 +211,9 @@ loader = "firmware"
 # The boot menu entry the firmware's DarwinBoot lists first, and the volume label of payload.img.
 title = "Diting iPadOS 18.7.10"
 volume = "UNIXNU"
-# 96 MiB, the --fat-mib a local run packs: DitingBootMemoryDxe refuses an initrd
-# above DITING_FAT_MAX_INITRD (128 MiB), and the 4096-byte PONGFAT1 header is
-# inside the payload image the package step repacks, so the volume stays well
-# below that bound.
+# 96 MiB, the --fat-mib a local run packs. The official UniXNURamDiskDxe scans
+# the raw FAT volume; DitingBootMemoryDxe and its 128 MiB initrd bound are not
+# part of the shipped firmware.
 size_mib = 96
 # The runtime arguments this board brings up with: the command line extracted from the
 # working addon18 image, verbatim (deduped by name, so a later same-name entry would
@@ -328,10 +327,8 @@ boot_partition_bytes = 0xC000000
 dtb = "build/diting/diting.dtb"
 
 [bootimg.image]
-# Diting's stock bootloader requires Android boot image v4. The UniXNU core bootimg step now packs
-# and verifies v3/v4 headers directly, so boot/boot.img is the flashable product rather than a v0
-# side artifact. The payload remains a FAT volume; the boot image's ramdisk is wrapped in the
-# PONGFAT1 envelope DitingBootMemoryDxe validates without changing payload/payload.img.
+# Diting's stock bootloader requires Android boot image v4. The UniXNU core bootimg step packs
+# and verifies v3/v4 headers directly, so boot/boot.img is the flashable product. The payload
+# remains a raw FAT volume; the official UniXNURamDiskDxe scans the FAT boot sector.
 header_version = 4
 pagesize = 4096
-ramdisk_envelope = "PONGFAT1"

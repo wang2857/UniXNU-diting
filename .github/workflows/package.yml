@@ -96,7 +96,7 @@ jobs:
           # 3f5c1ee is on this fork's diting-pin-0ce9779 branch and keeps the Diting
           # machine_config and MACHINE_CONFIGS work from 0ce9779.
           repository: wang2857/UniXNU
-          ref: 3f5c1eed5a7bc60bbf96f30d96a25f49217dfda1
+          ref: 8da8c9afa22c876df0aafbf2447ce46a5fd699b7
           path: UniXNU
           submodules: recursive
       - uses: actions/checkout@v4
@@ -394,7 +394,8 @@ jobs:
       - name: self-contained v4 (shim + firmware)
         # finalize-diting-adt.py leaves the kernel slot empty because a Diting device boots the
         # firmware from its own partition. A fastboot-boot candidate needs the shim and the
-        # volume in that slot, which scripts/build-bootimg.py already builds.
+        # volume in that slot. The ramdisk is the raw FAT payload; the official firmware scans
+        # its boot sector.
         working-directory: device
         env:
           DEFCONFIG: ${{ inputs.defconfig }}
@@ -409,27 +410,13 @@ jobs:
           DTB="$WORK/device-tree/build/diting/hardware.dtb"
           [ -f "$FD" ] || { echo "missing firmware volume: $FD" >&2; exit 1; }
           [ -f "$DTB" ] || { echo "missing hardware DTB: $DTB" >&2; exit 1; }
-          # DitingBootMemoryDxe validates the PONGFAT1 envelope, not a bare FAT volume, so
-          # take the envelope the v4 container already carries instead of payload.img.
-          python3 - "$WORK/boot/diting-xnu-initial.img" "$RUNNER_TEMP/payload-envelope.img" <<'PY'
-          import struct, sys
-          from pathlib import Path
-          img = Path(sys.argv[1]).read_bytes()
-          ks, rs = struct.unpack_from("<2I", img, 8)
-          hdr, = struct.unpack_from("<I", img, 20)
-          off = ((hdr + 4095)//4096)*4096 + ((ks + 4095)//4096)*4096
-          data = img[off:off+rs]
-          assert data[:8] == b"PONGFAT1", "the v4 ramdisk is not a PONGFAT1 envelope"
-          Path(sys.argv[2]).write_bytes(data)
-          print("envelope", len(data))
-          PY
           python3 scripts/build-bootimg.py \
             --shim "$GITHUB_WORKSPACE/firmware-fd/BootShim.bin" \
             --mkbootimg "$GITHUB_WORKSPACE/firmware-fd/mkbootimg.py" \
             --config "$GITHUB_WORKSPACE/firmware-fd/diting.toml" \
             --fd "$FD" \
             --dtb "$DTB" \
-            --ramdisk "$RUNNER_TEMP/payload-envelope.img" \
+            --ramdisk "$WORK/payload/payload.img" \
             --output-dir "$WORK/boot"
           ls -l "$WORK/boot"
       - name: keep the logs

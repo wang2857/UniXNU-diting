@@ -15,8 +15,7 @@ step repeats them with the local parameters so the artifacts agree:
   the development policy and the boot manifest hash.
 * The boot image is the container a local run writes: Android boot v4 with an
   empty kernel slot (this device boots the firmware from its own partition),
-  the payload wrapped in the PONGFAT1 envelope DitingBootMemoryDxe publishes, and
-  an empty signature area. The firmware refuses an initrd above 128 MiB, which
+  the raw FAT payload and an empty signature area. The firmware refuses an initrd above 128 MiB, which
   is why board.toml [payload] size_mib is 96.
 
 boot/boot.img itself stays exactly what `release` wrote: it is the document's
@@ -39,7 +38,6 @@ HEADER_BYTES = 4096          # PONGFAT1 header, and the boot image's first page
 SIGNATURE_BYTES = 4096       # boot v4 signature area, left empty
 BOOT_HEADER_V4_SIZE = 1584   # boot image header v4, as mkbootimg writes it
 BOOT_ARGS_BYTES = 1536       # BOOT_ARGS_SIZE 512 + BOOT_EXTRA_ARGS_SIZE 1024
-MAGIC = b'PONGFAT1'
 
 def _parse_adt(blob):
     def read(at):
@@ -138,11 +136,12 @@ def sha256(path):
 
 
 def envelope(fat):
-    """PONGFAT1 header followed by the FAT volume, as DitingBootMemoryDxe validates it.
+    """Return the FAT payload unchanged.
 
-    The firmware scans a bounded initrd for this header, then checks the version,
-    the header length, a 512-byte multiple length, the FAT signature, the sector
-    count and the CRC32 of the volume.
+    The shipped firmware uses the official UniXNURamDiskDxe, which finds the FAT
+    boot sector anywhere in the bounded initrd. The former PONGFAT1 header was a
+    board-local wrapper with no consumer; the device raw-FAT boot test on
+    2026-11-21 reached the iPadOS desktop without it.
     """
     if len(fat) % 512 or fat[510:512] != b'\x55\xaa' or struct.unpack_from('<H', fat, 11)[0] != 512:
         raise SystemExit('the payload volume is not a FAT volume with 512-byte sectors')
@@ -150,9 +149,7 @@ def envelope(fat):
     sectors = sectors16 or struct.unpack_from('<I', fat, 32)[0]
     if sectors != len(fat) // 512:
         raise SystemExit(f'the payload volume declares {sectors} sectors, it holds {len(fat) // 512}')
-    header = bytearray(HEADER_BYTES)
-    struct.pack_into('<8sIIQII', header, 0, MAGIC, 1, HEADER_BYTES, len(fat), zlib.crc32(fat) & 0xffffffff, 0)
-    return bytes(header) + fat
+    return fat
 
 
 def boot_image(ramdisk):
@@ -341,7 +338,7 @@ def main():
     if image[:8] != b'ANDROID!' or struct.unpack_from('<I', image, 40)[0] != 4:
         raise SystemExit('the boot image is not an Android v4 container')
     if image[HEADER_BYTES:HEADER_BYTES + 8] != MAGIC:
-        raise SystemExit('the ramdisk does not begin with the PONGFAT1 envelope')
+        raise SystemExit('the ramdisk does not begin with the FAT boot sector')
 
     record = {'generator': 'scripts/make-diting-adt-ipados18.py',
               'container': {'format': 'android-boot-v4', 'header_bytes': BOOT_HEADER_V4_SIZE,

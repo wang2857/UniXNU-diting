@@ -1,3 +1,8 @@
+#pragma clang diagnostic ignored "-Wc99-designator"
+#pragma clang diagnostic ignored "-Wreorder-init-list"
+#pragma clang diagnostic ignored "-Wunnecessary-virtual-specifier"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 // SM8475/Diting frontend. Optional register/registry probes default off;
 // the functional transport only issues read-only storage commands.

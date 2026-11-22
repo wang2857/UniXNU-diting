@@ -1,6 +1,6 @@
 # UniXNU-diting
 本仓库为 wang2857 的 fork；上游为 nagatoquin33/UniXNU-diting。
-当前基线为 iOS 18.7.10（22H374）；
+当前基线为 iOS 18.7.10（22H374）；已搁置，交给有缘人把，我能力不行
 本 fork 的 README 修改由 AI 辅助完成
 
 Redmi K50 至尊版（`diting` / Qualcomm SM8475）的 UniXNU 格式 2 设备仓库。目标系统为

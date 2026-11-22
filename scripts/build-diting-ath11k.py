@@ -271,7 +271,6 @@ void ieee80211_queue_work(struct ieee80211_hw *hw, struct work_struct *work) { i
     linked = out / 'ath11k-combined.o'
     subprocess.run(['xcrun', 'ld', '-r', '-arch', 'arm64', *[str(o) for _, o, _ in jobs], '-o', str(linked)], env=env, check=True)
     nm = diting_paths.tool('llvm-nm', 'DITING_LLVM_NM', ('/opt/local/bin/llvm-nm-mp-18',))
-    objcopy = diting_paths.tool('llvm-objcopy', 'DITING_LLVM_OBJCOPY', ('/opt/local/bin/llvm-objcopy-mp-18',))
     undefined = subprocess.check_output([nm, '-u', '-j', str(linked)], text=True).splitlines()
     (out / 'undefined-symbols.txt').write_text('\n'.join(undefined) + '\n')
     allowed = {'_DitingWifiRandom','_bzero','_memcmp','_memcpy','_memmove','_memset','_snprintf','_strchr','_strcmp','_strlen','_strncmp','_strncpy','_strtoul','_vsnprintf'}
@@ -283,7 +282,13 @@ void ieee80211_queue_work(struct ieee80211_hw *hw, struct work_struct *work) { i
     renames = {n: '_diting11_' + n[1:] for n in defined if not n.startswith('_nw_wifi_') and n not in exports}
     mapping = out / 'symbol-map.txt'; mapping.write_text(''.join(k + ' ' + v + '\n' for k, v in renames.items()))
     namespaced = out / 'DitingAth11k-linked.o'
-    subprocess.run([objcopy, '--redefine-syms=' + str(mapping), str(linked), str(namespaced)], check=True)
+    # Mach-O ld can impose the export aliases directly; using an external
+    # objcopy here rewrote LINKEDIT and corrupted the object on this toolchain.
+    link = ['xcrun', 'ld', '-r', '-arch', 'arm64']
+    for old_name, new_name in renames.items():
+        link += ['-alias', old_name, new_name]
+    link += [str(linked), '-o', str(namespaced)]
+    subprocess.run(link, check=True)
     archive.unlink(missing_ok=True)
     subprocess.run(['xcrun', 'libtool', '-static', '-o', str(archive), str(namespaced)], env=env, check=True)
     (out / 'build-report.json').write_text(json.dumps(dict(linux='v7.0.14', shared=str(shared),

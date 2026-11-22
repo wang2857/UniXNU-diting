@@ -215,7 +215,7 @@ volume = "UNIXNU"
 # 96 MiB, the --fat-mib a local run packs. The official UniXNURamDiskDxe scans
 # the raw FAT volume; DitingBootMemoryDxe and its 128 MiB initrd bound are not
 # part of the shipped firmware.
-size_mib = 160
+size_mib = 128
 # The runtime arguments this board brings up with: the command line extracted from the
 # working addon18 image, verbatim (deduped by name, so a later same-name entry would
 # replace the earlier one at its position). DarwinBoot copies the line into a

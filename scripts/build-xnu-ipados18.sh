@@ -283,6 +283,7 @@ for PATCH in "${PATCHES[@]}"; do
     find .cache/xnu-work -name '*.rej' -delete
   fi
 done
+python3 "$DITING_NATIVE_DRIVER_SOURCE/scripts/dedupe-diting-goodix.py" .cache/xnu-work/bsd/dev/diting_goodix.c
 python3 - <<'PY_PATCH_TIMES'
 from pathlib import Path
 import hashlib, json, os

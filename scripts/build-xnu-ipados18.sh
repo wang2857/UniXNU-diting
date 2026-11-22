@@ -284,6 +284,7 @@ for PATCH in "${PATCHES[@]}"; do
   fi
 done
 python3 "$DITING_NATIVE_DRIVER_SOURCE/scripts/dedupe-diting-goodix.py" .cache/xnu-work/bsd/dev/diting_goodix.c
+cp "$DITING_NATIVE_DRIVER_SOURCE/drivers/DitingTouch/diting_goodix.c" .cache/xnu-work/bsd/dev/diting_goodix.c
 python3 - <<'PY_PATCH_TIMES'
 from pathlib import Path
 import hashlib, json, os

@@ -282,13 +282,13 @@ void ieee80211_queue_work(struct ieee80211_hw *hw, struct work_struct *work) { i
     renames = {n: '_diting11_' + n[1:] for n in defined if not n.startswith('_nw_wifi_') and n not in exports}
     mapping = out / 'symbol-map.txt'; mapping.write_text(''.join(k + ' ' + v + '\n' for k, v in renames.items()))
     namespaced = out / 'DitingAth11k-linked.o'
-    # Mach-O ld can impose the export aliases directly; using an external
-    # objcopy here rewrote LINKEDIT and corrupted the object on this toolchain.
-    link = ['xcrun', 'ld', '-r', '-arch', 'arm64']
-    for old_name, new_name in renames.items():
-        link += ['-alias', old_name, new_name]
-    link += [str(linked), '-o', str(namespaced)]
-    subprocess.run(link, check=True)
+    # Mach-O nmedit localizes every defined global except the documented
+    # exports.  This avoids both the broken external objcopy and the duplicate
+    # globals an ld -alias leaves behind (for example _sock_release).
+    localize_list = out / 'localize.txt'
+    keep = {n for n in defined if n.startswith('_nw_wifi_') or n in exports}
+    localize_list.write_text('\n'.join(sorted(set(defined) - keep)) + '\n')
+    subprocess.run(['xcrun', 'nmedit', '-R', str(localize_list), str(linked), '-o', str(namespaced)], check=True)
     archive.unlink(missing_ok=True)
     subprocess.run(['xcrun', 'libtool', '-static', '-o', str(archive), str(namespaced)], env=env, check=True)
     (out / 'build-report.json').write_text(json.dumps(dict(linux='v7.0.14', shared=str(shared),

@@ -394,6 +394,10 @@ buttons_thread(void *unused)
     }
     say("Diting keys HID: physical side consumer opened; volume report device=%s\n",volume?"native":"unavailable, consumer events retained");
     struct diting_touch sample;ssize_t n;unsigned held=0;
+    int ready=-1,volume_tokens[2]={-1,-1};uint64_t volume_counts[2]={0,0};
+    (void)notify_register_check("dev.unixnu.diting.volume18.ready",&ready);
+    (void)notify_register_check("dev.unixnu.diting.volume18.increase",&volume_tokens[0]);
+    (void)notify_register_check("dev.unixnu.diting.volume18.decrease",&volume_tokens[1]);
     const uint32_t usages[]={HID_USAGE_POWER,HID_USAGE_VOLUME_UP,HID_USAGE_VOLUME_DOWN};
     while ((n=read(fd,&sample,sizeof(sample)))>0 || (n<0 && errno==EINTR)) {
         if (n<0) continue;
@@ -401,6 +405,19 @@ buttons_thread(void *unused)
             (sample.type!=DITING_BUTTON_DOWN && sample.type!=DITING_BUTTON_UP)) continue;
         bool down=sample.type==DITING_BUTTON_DOWN;
         if (down) held|=1u<<sample.finger;else held&=~(1u<<sample.finger);
+        if(sample.finger) {
+            uint64_t native_ready=0;
+            if(ready>=0 && !notify_get_state(ready,&native_ready) && native_ready==1 && volume_tokens[sample.finger-1]>=0) {
+                unsigned index=sample.finger-1;
+                if(down)volume_counts[index]++;
+                uint64_t state=(volume_counts[index]<<1)|(unsigned)down;
+                if(!notify_set_state(volume_tokens[index],state) &&
+                   !notify_post(index?"dev.unixnu.diting.volume18.decrease":"dev.unixnu.diting.volume18.increase")) {
+                    say("Diting keys18: volume=%u down=%u native action queued\n",index,down);
+                    continue;
+                }
+            }
+        }
         if(sample.finger && volume) {
             const uint8_t report[]={2,(uint8_t)((held>>1)&3)};
             int result=IOHIDUserDeviceHandleReportWithTimeStamp(volume,sample.time,report,sizeof(report));

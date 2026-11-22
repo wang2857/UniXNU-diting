@@ -2165,7 +2165,7 @@ typedef struct {float minimum,maximum,preferred;} frame_rate_range;
 static id (*original_link_with)(id,SEL,id,SEL);
 static void (*original_link_fps)(id,SEL,long);
 static void (*original_link_range)(id,SEL,frame_rate_range);
-static bool link_say,link_full;
+static bool link_say,link_full,link_all;
 static unsigned link_said;
 static char link_full_key;
 static bool link_at_full_rate(id link) {return link_full && objc_getAssociatedObject(link,&link_full_key)!=nil;}
@@ -2183,7 +2183,7 @@ static id link_with(id self,SEL selector,id target,SEL action)
     char who[160];
     if(link && target) {
         const char *name=object_getClassName(target);
-        if(!strcmp(name,"UIViewInProcessAnimationManager") || !strcmp(name,"UIKit.InProcessAnimationManager"))
+        if(link_all || !strcmp(name,"UIViewInProcessAnimationManager") || !strcmp(name,"UIKit.InProcessAnimationManager"))
             objc_setAssociatedObject(link,&link_full_key,(id)kCFBooleanTrue,OBJC_ASSOCIATION_ASSIGN);
     }
     if(link_say && link_said++<300)
@@ -2208,9 +2208,37 @@ static void link_range(id self,SEL selector,frame_rate_range range)
     if(link_at_full_rate(self))range=(frame_rate_range){0,0,0};
     original_link_range(self,selector,range);
 }
+static bool ca120;
+static id (*original_bundle_info)(id,SEL,id);
+static long long (*original_screen_max)(id,SEL);
+static id bundle_info_key(id self,SEL selector,id key)
+{
+    if(ca120 && key && CFEqual((CFTypeRef)key,CFSTR("CADisableMinimumFrameDurationOnPhone")))
+        return (id)kCFBooleanTrue;
+    return original_bundle_info?original_bundle_info(self,selector,key):nil;
+}
+static long long screen_max_fps(id self,SEL selector)
+{
+    if(ca120)return 120;
+    return original_screen_max?original_screen_max(self,selector):60;
+}
+static void ca120_install(void)
+{
+    Class bundle=objc_getClass("NSBundle");
+    Method info=bundle?class_getInstanceMethod(bundle,sel_registerName("objectForInfoDictionaryKey:")):NULL;
+    if(info && !original_bundle_info)
+        original_bundle_info=(id(*)(id,SEL,id))method_setImplementation(info,(IMP)bundle_info_key);
+    Class screen=objc_getClass("UIScreen");
+    Method max=screen?class_getInstanceMethod(screen,sel_registerName("maximumFramesPerSecond")):NULL;
+    if(max && !original_screen_max)
+        original_screen_max=(long long(*)(id,SEL))method_setImplementation(max,(IMP)screen_max_fps);
+    fprintf(stderr,"Diting CA120: disable-minimum-frame=%d screen-max=%d\n",info!=NULL,max!=NULL);
+}
+
 static void display_link_rates(void)
 {
     link_say=boot_option("diting_touch_lat=1");link_full=!boot_option("diting_dl_full=0");
+    link_all=boot_option("diting_dl_all=1");
     Class link=objc_getClass("CADisplayLink");
     if(!link || (!link_say && !link_full))return;
     Method made=class_getClassMethod(link,sel_registerName("displayLinkWithTarget:selector:"));
@@ -2223,15 +2251,123 @@ static void display_link_rates(void)
         made!=NULL,fps!=NULL,range!=NULL,link_full);
 }
 
+static id volume18_control(void)
+{
+    Class cls=objc_lookUpClass("SpringBoard");
+    SEL shared=sel_registerName("sharedApplication");
+    if(!method_abi(cls?class_getClassMethod(cls,shared):NULL,"@",0,""))return nil;
+    id app=((id(*)(id,SEL))objc_msgSend)((id)cls,shared);
+    Class application=app?object_getClass(app):Nil;
+    Ivar ivar=application?class_getInstanceVariable(application,"_volumeControl"):NULL;
+    const char *type=ivar?ivar_getTypeEncoding(ivar):NULL;
+    ptrdiff_t offset=ivar?ivar_getOffset(ivar):-1;
+    if(!type || type[0]!='@' || offset<0 ||
+       (size_t)offset+sizeof(id)>class_getInstanceSize(application))return nil;
+    id control=object_getIvar(app,ivar);
+    Class expected=objc_lookUpClass("SBVolumeControl");
+    for(Class actual=control?object_getClass(control):Nil;actual;actual=class_getSuperclass(actual))
+        if(actual==expected)return control;
+    return nil;
+}
+static struct {uint64_t presses;bool held;} volume18_keys[2];
+static bool volume18_ready;
+static int volume18_ready_token=-1;
+static const char *volume18_names[]={"dev.unixnu.diting.volume18.increase","dev.unixnu.diting.volume18.decrease"};
+static bool volume18_step(unsigned index)
+{
+    id control=volume18_control();
+    SEL action=sel_registerName(index?"decreaseVolume":"increaseVolume");
+    if(!control || !method_abi(class_getInstanceMethod(object_getClass(control),action),"v",0,""))return false;
+    ((void(*)(id,SEL))objc_msgSend)(control,action);
+    return true;
+}
+static void volume18_repeat(void *context)
+{
+    uintptr_t value=(uintptr_t)context;unsigned index=value&1;
+    if(!volume18_keys[index].held || volume18_keys[index].presses!=(value>>1))return;
+    if(volume18_step(index))dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),
+        dispatch_get_main_queue(),context,volume18_repeat);
+}
+static void volume18_prepare(void *context)
+{
+    if(volume18_ready)return;
+    unsigned attempt=(unsigned)(uintptr_t)context;
+    id control=volume18_control();
+    Class cls=control?object_getClass(control):Nil;
+    if(!cls ||
+       !method_abi(class_getInstanceMethod(cls,sel_registerName("increaseVolume")),"v",0,"") ||
+       !method_abi(class_getInstanceMethod(cls,sel_registerName("decreaseVolume")),"v",0,"")) {
+        if(attempt<30)dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC),
+            dispatch_get_main_queue(),(void *)(uintptr_t)(attempt+1),volume18_prepare);
+        else fprintf(stderr,"Diting volume18: matching SBVolumeControl ABI unavailable; keep consumer HID\n");
+        return;
+    }
+    for(unsigned i=0;i<2;i++) {
+        int token=-1;
+        if(notify_register_dispatch(volume18_names[i],&token,dispatch_get_main_queue(),^(int changed){
+            uint64_t state=0;if(notify_get_state(changed,&state))return;
+            uint64_t count=state>>1,old=volume18_keys[i].presses;
+            volume18_keys[i].held=(state&1)!=0;volume18_keys[i].presses=count;
+            uint64_t steps=count>=old?count-old:count;
+            if(steps>8)steps=8;
+            for(uint64_t n=0;n<steps;n++)(void)volume18_step(i);
+            if(steps && volume18_keys[i].held)dispatch_after_f(
+                dispatch_time(DISPATCH_TIME_NOW,400*NSEC_PER_MSEC),dispatch_get_main_queue(),
+                (void *)(uintptr_t)((count<<1)|i),volume18_repeat);
+            fprintf(stderr,"Diting volume18: native %s presses=%llu held=%u\n",i?"decrease":"increase",
+                (unsigned long long)steps,volume18_keys[i].held);
+        })!=NOTIFY_STATUS_OK)return;
+    }
+    if(notify_register_check("dev.unixnu.diting.volume18.ready",&volume18_ready_token)!=NOTIFY_STATUS_OK)return;
+    volume18_ready=true;(void)notify_set_state(volume18_ready_token,1);
+    fprintf(stderr,"Diting volume18: physical volume keys routed to 22H374 SBVolumeControl; power uses HID\n");
+}
+
+static void keyboard_window_probe(void *context)
+{
+    uintptr_t attempt=(uintptr_t)context;
+    if(attempt>6)return;
+    FILE *f=fopen("/private/var/tmp/inputui-kb.log","a");
+    if(f) {
+        Class appcls=objc_lookUpClass("UIApplication");
+        id app=appcls?((id(*)(id,SEL))objc_msgSend)((id)appcls,sel_registerName("sharedApplication")):nil;
+        id windows=app?((id(*)(id,SEL))objc_msgSend)(app,sel_registerName("windows")):nil;
+        unsigned long count=windows?((unsigned long(*)(id,SEL))objc_msgSend)(windows,sel_registerName("count")):0;
+        fprintf(f,"Diting keyboard windows attempt=%lu count=%lu\n",(unsigned long)attempt,count);
+        for(unsigned long i=0;i<count;i++) {
+            id w=((id(*)(id,SEL,unsigned long))objc_msgSend)(windows,sel_registerName("objectAtIndex:"),i);
+            if(!w)continue;
+            CGRect frame=((CGRect(*)(id,SEL))objc_msgSend)(w,sel_registerName("frame"));
+            BOOL hidden=((BOOL(*)(id,SEL))objc_msgSend)(w,sel_registerName("isHidden"));
+            double level=((double(*)(id,SEL))objc_msgSend)(w,sel_registerName("windowLevel"));
+            double alpha=((double(*)(id,SEL))objc_msgSend)(w,sel_registerName("alpha"));
+            fprintf(f,"Diting keyboard window %lu class=%s frame=%.1f,%.1f %.1fx%.1f hidden=%d level=%.1f alpha=%.3f\n",
+                (unsigned long)i,object_getClassName(w),frame.origin.x,frame.origin.y,frame.size.width,frame.size.height,
+                (int)hidden,level,alpha);
+        }
+        fflush(f);fclose(f);
+    }
+    dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),dispatch_get_main_queue(),
+        (void *)(uintptr_t)(attempt+1),keyboard_window_probe);
+}
+static void keyboard_window_start(void)
+{
+    dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),dispatch_get_main_queue(),NULL,keyboard_window_probe);
+}
+
 __attribute__((constructor)) static void diting_ui18_start(void)
 {
     const char *name=getprogname();
     if(!name)return;
+    ca120=boot_option("diting_ca_120=1");
+    if(ca120)ca120_install();
     if(!strcmp(name,"InputUI")) {
         assistant_defaults();
         char product[32]={};size_t length=sizeof(product);
-        if(!sysctlbyname("hw.product",product,&length,NULL,0) && !strcmp(product,"iPhone17,1"))
+        if(!boot_option("diting_keyboard_phone=0") &&
+           !sysctlbyname("hw.product",product,&length,NULL,0) && !strcmp(product,"iPhone17,1"))
             _dyld_register_func_for_add_image(keyboard_phone_image);
+        if(boot_option("diting_keyboard_log=1"))keyboard_window_start();
         return; // Do not import SpringBoard/status-bar/container hooks here.
     }
     if(!strcmp(name,"Sileo")){sileo_directories();return;}
@@ -2307,7 +2443,11 @@ __attribute__((constructor)) static void diting_ui18_start(void)
     if(strcmp(name,"SpringBoard")==0) {
         springboard_process=true;
         display_link_rates();
-        // Physical volume keys stay on the native HID/system event route.
+        // The consumer HID reports are accepted but physical volume remains
+        // unresponsive on this imported iPad board. Route volume transitions
+        // to the existing 22H374 SBVolumeControl; power stays on HID.
+        if(!boot_option("diting_volume_direct=0"))
+            dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC),dispatch_get_main_queue(),NULL,volume18_prepare);
         skip_setup=boot_option("diting_skip_setup=1");
         CFPreferencesSetAppValue(CFSTR("SBDisableAutoDim"),kCFBooleanTrue,kCFPreferencesCurrentApplication);
         dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),NULL,wake_home);

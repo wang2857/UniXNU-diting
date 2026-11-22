@@ -8,7 +8,7 @@ patches and the matching guest format ABI adapter; no firmware or images.
 import argparse,io,json,subprocess,tarfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-PIN='624bab3918de5b978e1101517abca2b4fa426565'
+PIN='70068f7cc002bca34d4025cc809105188822d780'
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--repository',type=Path,required=True)
 p.add_argument('--out',type=Path,required=True)

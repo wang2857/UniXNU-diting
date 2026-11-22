@@ -3,7 +3,8 @@
 #pragma once
 #include <stdint.h>
 enum {DitingScanoutVersion=2,DitingScanoutBgra=1,DitingScanoutMode=0x7000,
-      DitingScanoutWait=0x7002,DitingScanoutComplete=0x7003,DitingScanoutResetSources=0x7004,DitingScanoutMemory=0x5343};
+      DitingScanoutWait=0x7002,DitingScanoutComplete=0x7003,DitingScanoutResetSources=0x7004,DitingScanoutMemory=0x5343,
+      DitingScanoutMemoryAlt=0x5344};
 // A presenter rejected the frame before committing any GPU command. This is
 // distinct from a failed/unknown fence: CPU fallback cannot race DMA here.
 enum : uint32_t {DitingScanoutNotSubmitted=0x4e4f444d};

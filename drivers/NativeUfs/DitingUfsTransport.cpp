@@ -590,6 +590,7 @@ extern "C" bool diting_ufs_transport_start(IOService *provider) {
     return false;
   }
   gTransportAttempted = true;
+  IOLog("DITING_UFS LOG: transport start enter provider=%p\n", provider);
   // A built-in transport has no separate kext dependency record. Explicitly
   // start the genuine family and its personalities before using its classes.
   OSReturn loaded = OSKextLoadKextWithIdentifier("com.apple.iokit.IOStorageFamily");
@@ -597,11 +598,13 @@ extern "C" bool diting_ufs_transport_start(IOService *provider) {
     gRootDiagnostic.result = static_cast<uint32_t>(loaded);
     return transportFailure("IOStorageFamily load/start failed");
   }
+  IOLog("DITING_UFS LOG: IOStorageFamily loaded\n");
   loaded = OSKextLoadKextWithIdentifier("com.apple.filesystems.apfs");
   if (loaded != kOSReturnSuccess) {
     gRootDiagnostic.result = static_cast<uint32_t>(loaded);
     return transportFailure("APFS load/start failed");
   }
+  IOLog("DITING_UFS LOG: APFS loaded\n");
   // Original prelinked storage metadata must be initialized before allocation.
   OSSharedPtr<const OSSymbol> name(OSSymbol::withCStringNoCopy("IOBlockStorageDevice"), OSNoRetain);
   const OSMetaClass *meta = name ? OSMetaClass::getMetaClassWithName(name.get()) : nullptr;
@@ -609,6 +612,7 @@ extern "C" bool diting_ufs_transport_start(IOService *provider) {
     return transportFailure("original storage metaclass not registered");
   if (meta->getClassSize() != sizeof(IOBlockStorageDevice) || meta->getSuperClass() != &IOService::gMetaClass)
     return transportFailure("original storage class/parent ABI mismatch");
+  IOLog("DITING_UFS LOG: storage metaclass ABI ok\n");
   IOService *device = provider ? provider->getProvider() : nullptr;
   OSObject *firstProperty = device ? device->getProperty("unixnu,userdata-first-lba") : nullptr;
   OSObject *lastProperty = device ? device->getProperty("unixnu,userdata-last-lba") : nullptr;
@@ -645,6 +649,7 @@ extern "C" bool diting_ufs_transport_start(IOService *provider) {
     {"Data", "Diting persistent Data", "EFI PART", 512},
 #endif
   };
+  IOLog("DITING_UFS LOG: layout windows=%u\n", layout.windows);
   gRootWindowCount = 0;
   for (const auto &item : wanted) {
     bool found = false;
@@ -653,6 +658,7 @@ extern "C" bool diting_ufs_transport_start(IOService *provider) {
       if (gRootWindowCount >= 3) return transportFailure("too many SHNGROOT disks");
       gRootWindows[gRootWindowCount++] = {item.name, item.product, item.signature, item.offset,
         layout.userdataFirst * 4096ULL + layout.window[index].offset, layout.window[index].size};
+      IOLog("DITING_UFS LOG: window %s offset=%llu size=%llu\n", item.name, (unsigned long long)gRootWindows[gRootWindowCount-1].baseByte, (unsigned long long)gRootWindows[gRootWindowCount-1].size);
       found = true;
       break;
     }
@@ -663,7 +669,9 @@ extern "C" bool diting_ufs_transport_start(IOService *provider) {
     OSSharedPtr<DitingUfsBlock> block(new DitingUfsBlock, OSNoRetain);
     if (!block || !block->init(nullptr, gRootWindows[index]) || !block->attach(provider))
       return transportFailure("block allocation/attachment");
-    if (!block->start(provider)) {
+    bool started = block->start(provider);
+    IOLog("DITING_UFS LOG: block %s start=%d\n", gRootWindows[index].name, started);
+    if (!started) {
       block->detach(provider);
       // Actual I/O/controller failures still stop further DMA. A rejected
       // filesystem header leaves the transport usable for the other windows.
@@ -672,6 +680,7 @@ extern "C" bool diting_ufs_transport_start(IOService *provider) {
     }
     if (!strcmp(gRootWindows[index].name, "OS")) rootPublished = true;
   }
+  IOLog("DITING_UFS LOG: transport done rootPublished=%d\n", rootPublished);
   return rootPublished;
 }
 

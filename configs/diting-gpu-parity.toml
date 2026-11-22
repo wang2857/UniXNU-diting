@@ -6,6 +6,11 @@ kernel_snapshot = "services167: A730 ABI1, real single-ring admission, pageable/
 metal_runtime = "services167: scheduling branch135b0da adapted to22H374, current queue priorities/shared shader cache, real resolve/single-sample paths, explicit import handoff, O3 frontend, release/fatLTO Rust; remaining poster backlog recorded"
 reason = "Retain matched A730/22H374 ABI1. ABI2 address-space switching remains archived after services114-119 startup regressions."
 
+[m2v_rebase]
+translator = "70068f7cc002bca34d4025cc809105188822d780"
+base = "parity114 + upstream149 (0021/0022/0024/0025) + data-a-live (0012/0013/0015-0021)"
+compat = "Diting bridge APIs; stage_trace, release_spare, InPlaceWrites, specialized aliases"
+
 [upstream_main]
 core = "6790e7ce6e77f67a9174fba1255e64eacf1c41ad"
 metal = "831a9dcbd6ac7de89a11bdaf031e07b9aadfa3c8"

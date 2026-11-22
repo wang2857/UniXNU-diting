@@ -4,6 +4,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import urllib.parse
 import urllib.request
@@ -12,6 +13,12 @@ import urllib.request
 TAG = os.environ.get('UNIXNU_DRIVERKIT_TAG', 'xnu-10063.121.3')
 TRUST_TAG = os.environ.get('UNIXNU_TRUSTCACHE_TAG', 'xnu-8796.101.5')
 DESTINATION = Path('.cache/xnu-work/iokit/DriverKit')
+_HEADER_CACHE = Path(os.environ.get('DITING_XNU_HEADER_CACHE', '/Users/synn/Documents/deepseek-harness/安卓ios移稙/UniXNU-core/out/diting/ipados-18.7.10-22H374/diting_ipados18_bringup/device-tree/.cache'))
+if _HEADER_CACHE.is_dir():
+    for _rel in ('xnu-work/iokit/DriverKit', 'xnu-work/EXTERNAL_HEADERS/TrustCache'):
+        _src = _HEADER_CACHE / _rel
+        if _src.is_dir():
+            shutil.copytree(_src, Path('.cache') / _rel, dirs_exist_ok=True)
 CACHE = Path(f'.cache/sources/xnu-driverkit-{TAG.removeprefix("xnu-")}.json')
 URL = f'https://api.github.com/repos/apple-oss-distributions/xnu/contents/iokit/DriverKit?ref={TAG}'
 # Anonymous GitHub API calls share a small per-address quota that hosted CI runners exhaust (HTTP 403);

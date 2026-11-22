@@ -25,6 +25,7 @@ extern "C" int diting_gpu_fences(uint32_t *submitted,uint32_t *retired);
 namespace {
 IOLock *scanout_gate;
 IOMemoryDescriptor *scanout;
+IOMemoryDescriptor *scanoutAlt;
 task_t client;
 DitingScanoutModeInfo mode{};
 bool waiting=false,workerReady=false,poisoned=false,idleNotify=false;
@@ -44,7 +45,7 @@ void releaseSources() {for(auto &source:sources)if(!releaseSource(source))break;
 
 struct Pending {bool offered=false,delivered=false,done=false;uint64_t id=0;
     uint32_t status=0;IOMemoryDescriptor *memory=nullptr;IOMemoryMap *map=nullptr;
-    uint32_t stride=0;Source *source=nullptr;} pending;
+    uint32_t stride=0;Source *source=nullptr;unsigned target=0;} pending;
 
 uint64_t us(uint64_t a){uint64_t n=0;absolutetime_to_nanoseconds(a,&n);return n/1000;}
 uint64_t deadline(unsigned ms){uint64_t d=0;clock_interval_to_deadline(ms,kMillisecondScale,&d);return d;}
@@ -443,6 +444,7 @@ void dbInit(uint64_t physical,size_t rounded,uint32_t stride,uint32_t height)
             db[dbN]={phys,0};++dbN;++slotCount;
         }
         slotBytes=uint32_t(slotStride);
+        if(slotCount && slotMemory[0]) {slotUsed[0]=true;scanoutAlt=slotMemory[0];scanoutAlt->retain();}
         if(slotCount>0)dbOn=true;
         dpuLine(text,snprintf(text,sizeof text,"DITING DBUF: panel pool 0x%llx (%llu MiB): %u/%u canvas slots (%u MiB each), zc=%u async=%u, %ux%u\n",
             (unsigned long long)lease[0],(unsigned long long)(lease[1]>>20),slotCount,total,unsigned(slotStride>>20),zc,zcAsync,unsigned(mode.width),height));
@@ -677,6 +679,12 @@ extern "C" IOMemoryDescriptor *diting_scanout_memory(task_t owner)
     IOLockLock(scanout_gate);auto *memory=client==owner && !poisoned?scanout:nullptr;
     if(memory)memory->retain();IOLockUnlock(scanout_gate);return memory;
 }
+extern "C" IOMemoryDescriptor *diting_scanout_memory_alt(task_t owner)
+{
+    if(!scanout_gate)return nullptr;
+    IOLockLock(scanout_gate);auto *memory=client==owner && !poisoned?scanoutAlt:nullptr;
+    if(memory)memory->retain();IOLockUnlock(scanout_gate);return memory;
+}
 extern "C" bool diting_scanout_quarantined(void)
 {
     if(!scanout_gate)return false;
@@ -708,11 +716,11 @@ extern "C" IOReturn diting_scanout_call(task_t owner,unsigned op,const void *in,
     }
     if(op==DitingScanoutComplete && in && inBytes==sizeof(DitingScanoutDone) && !outBytes) {
         const auto &q=*static_cast<const DitingScanoutDone *>(in);
-        if(q.reserved || !pending.offered || !pending.delivered || pending.done || q.sequence!=pending.id) {
+        if(q.reserved>1 || !pending.offered || !pending.delivered || pending.done || q.sequence!=pending.id) {
             IOLockUnlock(scanout_gate);return kIOReturnBadArgument;
         }
         gpuTraceEvent(GpuTraceDisplayFence,0,q.sequence,q.status?2:1,q.sequence,q.sequence,q.status?0:q.sequence,0,0,0,q.status);
-        pending.status=q.status;pending.done=true;
+        pending.status=q.status;pending.target=q.reserved;pending.done=true;
         if(q.status==DitingScanoutNotSubmitted)workerReady=false;
         if(q.status && q.status!=DitingScanoutNotSubmitted)poisoned=true;
         IOLockWakeup(scanout_gate,&pending,false);IOLockUnlock(scanout_gate);return kIOReturnSuccess;
@@ -793,7 +801,7 @@ extern "C" int diting_scanout_frame(IOMemoryDescriptor *source,size_t offset,uin
         dbSettle();
         if(dbShown!=0 || dbFlipped>0) {
             if(dbFlipped>=0){for(unsigned k=0;k<200 && !dbLatched();++k)IODelay(100);dbSettle();}
-            dbFlip(0);
+            dbFlip(pending.target && dbN>1 ? 1 : 0);
             for(unsigned k=0;k<80 && !dbLatched();++k)IODelay(250);
             dbSettle();
         }

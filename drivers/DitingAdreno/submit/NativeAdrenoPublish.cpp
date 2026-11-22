@@ -57,7 +57,7 @@ enum : UInt32 {NativeAdrenoPluginOpenType=0x4147,NativeAdrenoTunnelMagic=0x4e544
  * wait for a frame, complete it) are forwarded unchanged, without the GPU lock (a wait sleeps); memory type NativeAdrenoScanoutType is the
  * writable scanout. Nothing here touches the GPU. */
 enum : UInt32 {NativeAdrenoHandoffBase=0x7000,NativeAdrenoHandoffLast=0x7004,NativeAdrenoScanoutType=0x5343,
-               NativeAdrenoHandoffOpenType=0x4148};
+               NativeAdrenoScanoutAltType=0x5344,NativeAdrenoHandoffOpenType=0x4148};
 /* Open type 0x4148 is a connection that serves only the hand-off: it does not mount a GPU core, so it does not need (or take) a
  * GPU connection slot (the Vulkan driver holds one for as long as the Metal device lives). Same class, so the same sandbox admission. */
 extern "C" IOReturn native_gop_handoff_call(uint32_t op,task_t task,const void *in,size_t inSize,void *out,size_t outSize);
@@ -71,6 +71,7 @@ enum : UInt32 {NativeAdrenoExportMethod=0x7100,NativeAdrenoExportMaxPiece=3968};
 static constexpr int (*boot_log_export_put)(uint32_t,uint32_t,uint32_t,const void *,uint32_t)=nullptr;
 extern "C" {volatile uint32_t native_adreno_export_stats[4];}   /* [0] pieces taken, [1] refused, [2] last generation, [3] its total bytes */
 extern "C" IOMemoryDescriptor *native_gop_handoff_memory(void);
+extern "C" IOMemoryDescriptor *native_gop_handoff_memory_alt(void);
 
 /* Mailbox: a last-resort command channel for a sandbox that admits no external-method selector at all. It is one shared page (memory
  * type NativeAdrenoMailboxType through IOConnectMapMemory64, which the selector filter does not cover) and a kernel poller that runs
@@ -453,6 +454,14 @@ IOReturn AGXDeviceUserClient::clientMemoryForType(UInt32 type,IOOptionBits *opti
         if(!scanout)return kIOReturnNotReady;
         *memory=scanout;                        /* already retained for the caller */
         *options=kIOMapAnywhere|kIOMapInhibitCache;   /* firmware framebuffer: device memory, never cached by the CPU */
+        return kIOReturnSuccess;
+    }
+    if(type==NativeAdrenoScanoutAltType) {
+        if(!live_ && !handoffOnly_)return kIOReturnNotReady;
+        IOMemoryDescriptor *scanout=native_gop_handoff_memory_alt();
+        if(!scanout)return kIOReturnNotReady;
+        *memory=scanout;
+        *options=kIOMapAnywhere|kIOMapInhibitCache;
         return kIOReturnSuccess;
     }
     if(type==NativeAdrenoMailboxType) {

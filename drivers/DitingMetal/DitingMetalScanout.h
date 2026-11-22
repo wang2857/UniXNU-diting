@@ -10,7 +10,7 @@ namespace ditingscanout {
 using Open=kern_return_t(*)(unsigned,mach_port_t,unsigned,unsigned *);
 using Call=kern_return_t(*)(unsigned,unsigned,const void *,size_t,void *,size_t *);
 using Map=kern_return_t(*)(unsigned,unsigned,mach_port_t,uint64_t *,uint64_t *,unsigned);
-struct Context {unsigned connection,version;Call call;gpupresent::Presenter *presenter;};
+struct Context {unsigned connection,version;Call call;gpupresent::Presenter *presenters[2];unsigned next;};
 static void *serve(void *opaque)
 {
     auto *context=static_cast<Context *>(opaque);unsigned copies=0,refusals=0;
@@ -33,13 +33,15 @@ static void *serve(void *opaque)
             if(status || bytes!=sizeof(frame) || (context->version==1 && frame.source_id) || frame.format!=DitingScanoutBgra) {
                 report("scanout frame wait stopped",status?:-1);return nullptr;
             }
-            auto result=context->presenter->present({reinterpret_cast<void *>(frame.address),size_t(frame.bytes),
+            const unsigned target=context->next++&1;
+            const unsigned useTarget=context->presenters[target]?target:0;
+            auto result=context->presenters[useTarget]->present({reinterpret_cast<void *>(frame.address),size_t(frame.bytes),
                 size_t(frame.stride),frame.width,frame.height,context->version>=2?frame.source_id:0});
             // Presenter returns kOk only after waitUntilCompleted reports the
             // real command buffer completed. Errors never retire as success.
             const bool notSubmitted=result!=gpupresent::kOk && result!=gpupresent::kGpuFailed;
             DitingScanoutDone done{frame.sequence,result==gpupresent::kOk?0u:
-                (notSubmitted?uint32_t(DitingScanoutNotSubmitted):0xe00002bcu),0};bytes=0;
+                (notSubmitted?uint32_t(DitingScanoutNotSubmitted):0xe00002bcu),useTarget};bytes=0;
             status=context->call(context->connection,DitingScanoutComplete,&done,sizeof(done),nullptr,&bytes);
             if(status || result==gpupresent::kGpuFailed) {
                 report("GPU scanout copy failed; mappings retained",status?:int(result));return nullptr;
@@ -50,7 +52,7 @@ static void *serve(void *opaque)
                 // No DMA was submitted. Retire stale imported surfaces after
                 // sleep/wake, keep the waiter alive, and back off. A genuine
                 // submitted GPU failure above still retains all DMA backing.
-                context->presenter->resetSources();
+                context->presenters[useTarget]->resetSources();
                 resetImports=true;
             } else {
                 refusals=0;
@@ -109,7 +111,15 @@ static void start(void *iokit,unsigned service,id<MTLDevice> device)
         // connection/backing for teardown rather than silently recycle it.
         report("GPU scanout import unavailable; CPU fallback requires retired DMA",-1);return;
     }
-    auto *context=new Context{connection,mode.version,call,presenter};pthread_t thread;
+    gpupresent::Presenter *alt=nullptr;
+    uint64_t altAddress=0,altLength=0;
+    status=map(connection,DitingScanoutMemoryAlt,mach_task_self(),&altAddress,&altLength,1);
+    if(!status && altAddress && altLength>=mode.bytes) {
+        alt=new gpupresent::Presenter(device,{reinterpret_cast<void *>(altAddress),size_t(altLength),
+            size_t(mode.stride),uint32_t(mode.width),uint32_t(mode.height)});
+        if(!alt->ready()){delete alt;alt=nullptr;}
+    }
+    auto *context=new Context{connection,mode.version,call,{presenter,alt},1};pthread_t thread;
     pthread_attr_t attr;pthread_attr_init(&attr);pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
     pthread_attr_setstacksize(&attr,1024*1024);
     int result=pthread_create(&thread,&attr,serve,context);pthread_attr_destroy(&attr);

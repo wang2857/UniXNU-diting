@@ -7,6 +7,7 @@
 #import <Metal/Metal.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 extern "C" const void *nmb_scanout_convert_air(size_t *);
 extern "C" id native_bridge_metal_library_with_air(const void *,size_t);
@@ -64,7 +65,7 @@ public:
         // compositor's framebuffer alpha is not display opacity. One GPU
         // dispatch copies pitched BGRA rows and supplies opaque alpha. Keep
         // the existing blit if this optional pipeline cannot be made.
-        if (!(frame.stride&3) && !(scanout_.stride&3) && opaquePipeline()) {
+        if (false && !(frame.stride&3) && !(scanout_.stride&3) && opaquePipeline()) {
             id<MTLCommandBuffer> commands=[queue_ commandBuffer];
             id<MTLComputeCommandEncoder> encoder=commands?[commands computeCommandEncoder]:nil;
             if(!encoder)return kNoResource;

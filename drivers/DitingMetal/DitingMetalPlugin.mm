@@ -190,6 +190,7 @@ static id openDevice(unsigned port)
     // Live Metal queues publish their current aggregate priority. Keep an
     // explicit user override, but never force a process-wide permanent boost.
     setenv("CA_DISABLE_FRAMEBUFFER_COMPRESSION","1",1);
+    setenv("CA_DISABLE_DIRTY_REGIONS","1",1);
     ditingQuartzCore18DisplayPolicy();
     CFPreferencesSetAppValue(CFSTR("CAEnableDeepFramebuffer"),kCFBooleanFalse,kCFPreferencesCurrentApplication);
     CFPreferencesSetAppValue(CFSTR("CAEnableFramebufferCompression"),kCFBooleanFalse,kCFPreferencesCurrentApplication);

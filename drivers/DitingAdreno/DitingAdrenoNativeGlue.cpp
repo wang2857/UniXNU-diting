@@ -20,6 +20,8 @@ extern "C" IOReturn native_gop_handoff_call(uint32_t op,task_t task,const void *
 {return diting_scanout_call(task,op+DitingScanoutMode,in,inSize,out,outSize);}
 extern "C" IOMemoryDescriptor *native_gop_handoff_memory(void)
 {return diting_scanout_memory(current_task());}
+extern "C" IOMemoryDescriptor *native_gop_handoff_memory_alt(void)
+{return diting_scanout_memory_alt(current_task());}
 bool DitingAdrenoConfigureService(IOService *service)
 {
     if(!service || !diting_adreno_native_healthy())return false;
